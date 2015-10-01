@@ -1,6 +1,26 @@
 #!/usr/bin/env python
 import sqlite3
 import sys
+import platform;
+
+if int(platform.python_version_tuple()[0])>2:
+	from tkinter import *
+	from tkinter.filedialog import *
+	from tkinter.messagebox import *
+else:
+	from Tkinter import *
+	from tkFileDialog import *
+	from tkMessageBox import *
+
+version = "0.0.1"
+
+
+def msg(msg):
+    print(msg)
+
+def clear_msg():
+    pass
+
 
 class ktv:
     def __init__(self,key,type,value):
@@ -113,7 +133,7 @@ def get_entity_names(db, table, id_list):
         name = get_entity_name(db, table, uid)
         if name: return r+name+":"
         else:
-            print(uid)
+            msg("could not find entity: "+uid)
             return r+"Name not found:"
 
     if id_list==-1 or id_list=="NULL" or id_list=="": return ""
@@ -125,27 +145,22 @@ def csv_titles(db, table, entity_type):
                   get_attribute_ids_types(db, table, entity_type),
                   "")
 
-def csv_inner(r,entity_id):
-    return r+conv_csv(get_entity_plain(db, table, entity_id))+"\n"
-
-def csv(db, table, entity_type, raw):
+def write_csv(f, db, table, entity_type, raw):
     count=0
     c = db.cursor()
     c.execute('select e.entity_id from '+table+'_entity as e '\
               'where e.entity_type = ?',
               (entity_type,))
     records = c.fetchall()
-    if raw:
-        return csv_titles(db,table,entity_type)+"\n"+\
-            reduce(lambda r,entity_id: r+conv_csv_raw(get_entity_plain(db, table, entity_id))+"\n",
-                   map(lambda i: i[0], records), "")
-    else:
-        print("converting "+str(len(records))+" records")
-        return csv_titles(db,table,entity_type)+"\n"+\
-            reduce(csv_inner,
-                   map(lambda i: i[0], records), "")
+    msg("converting "+str(len(records))+" records")
+    f.write(csv_titles(db,table,entity_type)+"\n")
+    for n,record in enumerate(records):
+        msg(entity_type+": "+str(n)+" out of "+str(len(records))+(": %02d"%(n/float(len(records))*100.0))+"% done...")
+        entity_id = record[0]
+        f.write(conv_csv(db,get_entity_plain(db, table, entity_id))+"\n")
+        #f.write(conv_csv_raw(db,get_entity_plain(db, table, entity_id))+"\n")
 
-def conv_csv_ktv(k):
+def conv_csv_ktv(db,k):
     if k==None:
         return ""
     elif k.key[0:8]=="id-list-" or\
@@ -171,24 +186,97 @@ def conv_csv_ktv(k):
             return "\""+k.value+"\""
         else: return str(k.value)
 
-def conv_csv(data):
+def conv_csv(db,data):
     return reduce(lambda r,elem:
-                  r+conv_csv_ktv(elem)+", ",
+                  r+conv_csv_ktv(db,elem)+", ",
                   data, "")
 
-def conv_csv_raw(data):
+def conv_csv_raw(db, data):
     return reduce(lambda r,elem:
                   r+"\""+str(elem.value)+"\", ",
                   data, "")
 
-db = sqlite3.connect(sys.argv[1])
+############################################################
 
-print get_all_entity_types(db,'stream')
-#print get_attribute_ids_types(db, 'stream', 'group-interaction')
+class win:
+    def __init__(self):
+        self.db = False
+        self.table = "stream"
 
-table = 'stream'
+        # create window
+        self.root = Tk()
+        self.root.title("mongoose converter "+version)
+        top = Frame(self.root)
+        top.pack(fill=BOTH)
 
-for i in get_all_entity_types(db,table):
-    print("writing "+i)
-    with open(i+'.csv','w') as f:
-        f.write(csv(db,table,i,False))
+        f=Frame(top)
+        f.pack(side=LEFT);
+        Button(f, text="load database", command=self.load_database).grid(row=0, column=0, sticky="we")
+        Button(f, text="extract csv to", command=self.save_as).grid(row=0, column=1, sticky="we")
+
+        self.pack_var = IntVar()
+        cb=Checkbutton(f, text="pack data", variable=self.pack_var, command=self.pack)
+        cb.grid(row=0, column=2)
+
+        self.debug = Text(self.root, height=30, width=60)
+        self.debug.pack()
+        self.debug.insert(END, "ready for action...\n")
+
+
+
+    def msg(self,msg):
+        self.debug.insert(END, msg+"\n")
+        self.debug.see(END)
+        self.root.update()
+
+    def clear_msg(self):
+        self.debug.delete(0.0, END)
+        self.root.update()
+
+    def pack(self):
+        clear_msg()
+        if self.pack_var.get()==1:
+            msg("switching to pack data")
+            self.table="sync"
+            self.print_types()
+        else:
+            msg("switching to observation data")
+            self.table="stream"
+            self.print_types()
+
+    def print_types(self):
+        msg("record types available are:")
+        for i in get_all_entity_types(self.db,self.table):
+            msg(i)
+
+    def load_database(self):
+        filename = askopenfilename(title = "load database")
+        if filename!="":
+            self.clear_msg()
+            self.db = sqlite3.connect(filename)
+            table = 'stream'
+            msg("opened "+filename)
+            self.print_types()
+            #print get_attribute_ids_types(db, 'stream', 'group-interaction')
+
+    def save_as(self):
+        filename = askdirectory(title = "choose a directory to save the csv files in")
+        if filename!="":
+            for i in get_all_entity_types(self.db,self.table):
+                msg("writing "+i)
+                with open(filename+"/"+i+'.csv','w') as f:
+                    write_csv(f,self.db,self.table,i,False)
+
+
+
+
+
+w = win()
+
+msg = w.msg
+clear_msg = w.clear_msg
+
+try:
+    w.root.mainloop()
+except Exception,e:
+    msg(e)
