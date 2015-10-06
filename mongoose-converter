@@ -12,7 +12,7 @@ else:
 	from tkFileDialog import *
 	from tkMessageBox import *
 
-version = "0.0.1"
+version = "0.0.2"
 
 
 def msg(msg):
@@ -123,7 +123,13 @@ uid_to_name = {}
 def get_entity_name(db, table, unique_id):
     if unique_id in uid_to_name:
         return uid_to_name[unique_id]
-    name = ktv_get(get_entity_by_unique(db, table, unique_id), "name")
+
+    if unique_id=="Unknown":
+            name="Unknown"
+    elif unique_id=="None":
+            name="None"
+    else:
+            name = ktv_get(get_entity_by_unique(db, table, unique_id), "name")
     uid_to_name[unique_id]=name
     return name
 
