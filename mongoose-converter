@@ -12,8 +12,7 @@ else:
 	from tkFileDialog import *
 	from tkMessageBox import *
 
-version = "0.0.2"
-
+version = "0.0.3"
 
 def msg(msg):
     print(msg)
@@ -70,8 +69,10 @@ def safe_build_ktv(key,type,v):
 
 def get_entity_plain(db, table, entity_id):
     entity_type = get_entity_type(db,table,entity_id)
+    #print entity_id
+    #print entity_type
     return map(lambda idtype:
-               safe_build_ktv(idtype[0], idtype[1], get_value(db,table,entity_id,ktv(idtype[0],idtype[1],-1))),
+               safe_build_ktv(idtype[0], idtype[1], get_value(db,table,entity_id,ktv(idtype[0],idtype[1],888))),
                get_attribute_ids_types(db,table,entity_type))
 
 def get_unique_id(db, table, entity_id):
@@ -83,6 +84,7 @@ def get_unique_id(db, table, entity_id):
     else: return False
 
 def get_entity(db, table, entity_id):
+  #print get_unique_id(db, table, entity_id)
   return [ktv("unique_id", "varchar", get_unique_id(db, table, entity_id))] +\
       get_entity_plain(db, table, entity_id)
 
@@ -130,14 +132,14 @@ def get_entity_name(db, table, unique_id):
             name="None"
     else:
             name = ktv_get(get_entity_by_unique(db, table, unique_id), "name")
-    uid_to_name[unique_id]=name
+            uid_to_name[unique_id]=name
     return name
 
 
 def get_entity_names(db, table, id_list):
     def _(r,uid):
         name = get_entity_name(db, table, uid)
-        if name: return r+name+":"
+        if name and name!=-1 : return r+name+":"
         else:
             msg("could not find entity: "+uid)
             return r+"Name not found:"
@@ -183,7 +185,8 @@ def conv_csv_ktv(db,k):
             return "\""+names+"\""
     elif k.key[0:3]=="id-" or k.key=="pack":
         name = get_entity_name(db,"sync",k.value)
-        if not name:
+        if not name or name==-1:
+            print("name not found for "+str(k.value))
             return "Name not found"
         else:
             return "\""+name+"\""
@@ -274,7 +277,11 @@ class win:
                     write_csv(f,self.db,self.table,i,False)
 
 
-
+# precache old mongoose names
+#fallback_fn = "mongoose-2015-09-30 20:48:57.db"
+#fallback_db = sqlite3.connect(fallback_fn)
+#for e in all_entities(fallback_db, "sync", "mongoose"):
+#    print(get_entity_name(fallback_db, "sync", get_unique_id(fallback_db,"sync",e[0])))
 
 
 w = win()
